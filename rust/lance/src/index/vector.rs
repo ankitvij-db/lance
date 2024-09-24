@@ -252,16 +252,29 @@ pub(crate) async fn build_vector_index(
             });
         };
 
-        build_ivf_pq_index(
-            dataset,
-            column,
-            name,
-            uuid,
+        IvfIndexBuilder::<FlatIndex, ProductQuantizer>::new(
+            dataset.clone(),
+            column.to_owned(),
+            dataset.indices_dir().child(uuid),
             params.metric_type,
-            ivf_params,
-            pq_params,
-        )
+            Box::new(shuffler),
+            Some(ivf_params.clone()),
+            Some(pq_params.clone()),
+            (),
+        )?
+        .build()
         .await?;
+
+        // build_ivf_pq_index(
+        //     dataset,
+        //     column,
+        //     name,
+        //     uuid,
+        //     params.metric_type,
+        //     ivf_params,
+        //     pq_params,
+        // )
+        // .await?;
     } else if is_ivf_hnsw(stages) {
         let len = stages.len();
         let StageParams::Hnsw(hnsw_params) = &stages[1] else {
