@@ -1445,6 +1445,7 @@ class LanceDataset(pa.dataset.Dataset):
         ivf_centroids_file: Optional[str] = None,
         precomputed_partiton_dataset: Optional[str] = None,
         storage_options: Optional[Dict[str, str]] = None,
+        version: Optional[str] = None,
         **kwargs,
     ) -> LanceDataset:
         """Create index on column.
@@ -1757,6 +1758,9 @@ class LanceDataset(pa.dataset.Dataset):
                     [pq_codebook], ["_pq_codebook"]
                 )
                 kwargs["pq_codebook"] = pq_codebook_batch
+
+        if index_type == "IVF_PQ" and version is not None:
+            kwargs["format_version"] = version
 
         if shuffle_partition_batches is not None:
             kwargs["shuffle_partition_batches"] = shuffle_partition_batches

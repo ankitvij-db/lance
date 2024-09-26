@@ -65,6 +65,10 @@ pub struct VectorIndexParams {
 
     /// Vector distance metrics type.
     pub metric_type: MetricType,
+
+    /// Use V3 Index builder.
+    /// Only used by IVF_PQ index since IVF_PQ still creates old index format by default.
+    pub force_use_v3_index_builder: Option<bool>,
 }
 
 impl VectorIndexParams {
@@ -74,6 +78,7 @@ impl VectorIndexParams {
         Self {
             stages,
             metric_type,
+            force_use_v3_index_builder: None,
         }
     }
 
@@ -106,6 +111,7 @@ impl VectorIndexParams {
         Self {
             stages,
             metric_type,
+            force_use_v3_index_builder: None,
         }
     }
 
@@ -119,7 +125,18 @@ impl VectorIndexParams {
         Self {
             stages,
             metric_type,
+            force_use_v3_index_builder: None,
         }
+    }
+
+    pub fn with_ivf_pq_params_v3(
+        metric_type: MetricType,
+        ivf: IvfBuildParams,
+        pq: PQBuildParams,
+    ) -> Self {
+        let mut params = Self::with_ivf_pq_params(metric_type, ivf, pq);
+        params.force_use_v3_index_builder = Some(true);
+        params
     }
 
     /// Create index parameters with `IVF`, `PQ` and `HNSW` parameters, respectively.
@@ -138,6 +155,7 @@ impl VectorIndexParams {
         Self {
             stages,
             metric_type,
+            force_use_v3_index_builder: Some(true),
         }
     }
 
@@ -157,6 +175,7 @@ impl VectorIndexParams {
         Self {
             stages,
             metric_type,
+            force_use_v3_index_builder: None,
         }
     }
 }
@@ -252,29 +271,33 @@ pub(crate) async fn build_vector_index(
             });
         };
 
-        IvfIndexBuilder::<FlatIndex, ProductQuantizer>::new(
-            dataset.clone(),
-            column.to_owned(),
-            dataset.indices_dir().child(uuid),
-            params.metric_type,
-            Box::new(shuffler),
-            Some(ivf_params.clone()),
-            Some(pq_params.clone()),
-            (),
-        )?
-        .build()
-        .await?;
+        let use_v3_index_format = params.force_use_v3_index_builder.unwrap_or(false);
 
-        // build_ivf_pq_index(
-        //     dataset,
-        //     column,
-        //     name,
-        //     uuid,
-        //     params.metric_type,
-        //     ivf_params,
-        //     pq_params,
-        // )
-        // .await?;
+        if use_v3_index_format {
+            IvfIndexBuilder::<FlatIndex, ProductQuantizer>::new(
+                dataset.clone(),
+                column.to_owned(),
+                dataset.indices_dir().child(uuid),
+                params.metric_type,
+                Box::new(shuffler),
+                Some(ivf_params.clone()),
+                Some(pq_params.clone()),
+                (),
+            )?
+            .build()
+            .await?;
+        } else {
+            build_ivf_pq_index(
+                dataset,
+                column,
+                name,
+                uuid,
+                params.metric_type,
+                ivf_params,
+                pq_params,
+            )
+            .await?;
+        }
     } else if is_ivf_hnsw(stages) {
         let len = stages.len();
         let StageParams::Hnsw(hnsw_params) = &stages[1] else {
