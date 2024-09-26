@@ -81,6 +81,7 @@ use crate::{LanceReader, Scanner};
 
 use self::cleanup::CleanupStats;
 use self::commit::PyCommitLock;
+use lance_file::version::LanceFileVersion;
 
 pub mod cleanup;
 pub mod commit;
@@ -1679,9 +1680,33 @@ fn prepare_vector_index_params(
     }
 
     match index_type {
-        "IVF_PQ" => Ok(Box::new(VectorIndexParams::with_ivf_pq_params(
-            m_type, ivf_params, pq_params,
-        ))),
+        "IVF_PQ" => {
+            let format_version = kwargs
+                .and_then(|dict| dict.get_item("format_version").ok())
+                .and_then(|version| version.and_then(|v| v.extract::<String>().ok()))
+                .map(|v| v.parse::<LanceFileVersion>())
+                .transpose()
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "Invalid format version: {}",
+                        e
+                    ))
+                })?;
+
+            let is_v3_version = format_version
+                .map(|v| v.resolve() == LanceFileVersion::V2_0)
+                .unwrap_or(false);
+
+            if is_v3_version {
+                Ok(Box::new(VectorIndexParams::with_ivf_pq_params_v3(
+                    m_type, ivf_params, pq_params,
+                )))
+            } else {
+                Ok(Box::new(VectorIndexParams::with_ivf_pq_params(
+                    m_type, ivf_params, pq_params,
+                )))
+            }
+        }
 
         "IVF_HNSW_PQ" => Ok(Box::new(VectorIndexParams::with_ivf_hnsw_pq_params(
             m_type,

@@ -244,6 +244,7 @@ pub fn get_index_params(
         Some(VectorIndexParams {
             metric_type: distance_type,
             stages,
+            force_use_v3_index_builder: None,
         })
     } else {
         None
